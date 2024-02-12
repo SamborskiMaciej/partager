@@ -18,7 +18,9 @@
 #include <bits/pthreadtypes.h>
 #include <wchar.h>
 
+#include "args.h"
 #include "term.h"
+#include "common.h"
 
 #define DA_IMPLEMENTATION
 #include "da.h"
@@ -32,11 +34,11 @@ enum {
     THREAD_COUNT = 2,
 };
 
-typedef int fd_t;
-
 void * sender(void * arg)
 {
     fd_t * connFd = arg;
+
+    (void) connFd;
 
     return NULL;
 }
@@ -122,14 +124,9 @@ void serve()
     close(sockFd);
 }
 
-typedef struct State {
-    Term term;
-    dynarr(char *) messages;
-} State;
-
 void draw(State * state)
 {
-    int x, y;
+    size_t x, y;
     getmaxyx(stdscr, y, x);
     if (state->term.termX != x ||
         state->term.termY != y)
@@ -172,7 +169,7 @@ void loop(State * state)
             daBzero(buffer);
             state->term.inputX = 1;
 
-            for (size_t i = 1; i < getmaxx(state->term.input) - 1; ++i)
+            for (int i = 1; i < getmaxx(state->term.input) - 1; ++i)
                 mvwprintw(state->term.input, state->term.inputY, i, " ");
 
             break;
@@ -189,6 +186,7 @@ void loop(State * state)
 
         case KEY_UP:
         case KEY_DOWN:
+        case KEY_RESIZE:
             break;
 
         case KEY_BACKSPACE:
@@ -207,9 +205,6 @@ void loop(State * state)
             recreateWindows(&state->term);
             break;
 
-        case 410: /* F11 */
-            break;
-
         default:
             if (state->term.inputX < getmaxx(state->term.input) - 2)
             {
@@ -226,21 +221,32 @@ void loop(State * state)
     daFree(buffer);
 }
 
-int main(void)
+int main(int argc, char ** argv)
 {
-    State state = {
-        .term = { },
-        .messages = daCreate(char *, 64),
-    };
+    int ret = 0;
+    State state = createDefaultState();
 
-    loop(&state);
-
-    for (size_t i = 0; i < daSize(state.messages); ++i)
+    partresult result = parseArgs(argc, argv, &state);
+    if (result < 0)
     {
-        free(state.messages[i]);
+        fprintf(stderr, "ERROR:  Parsing of command line arguments failed!\n");
+        ret = 1;
+        goto exit;
     }
 
+    printf("IP: %s\n", state.conf.ip);
+    printf("PORT: %d\n", state.conf.port);
+    printf("MODE: %d\n", state.conf.mode);
+
+    // loop(&state);
+
+    // for (size_t i = 0; i < daSize(state.messages); ++i)
+    // {
+    //     free(state.messages[i]);
+    // }
+
+exit:
     daFree(state.messages);
 
-    return 0;
+    return ret;
 }
